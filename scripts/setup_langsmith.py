@@ -142,7 +142,10 @@ def promote_traces(client: Client, limit: int) -> None:
     ds = client.read_dataset(dataset_name=DATASET_NAME)
     have = {(ex.inputs or {}).get("question") for ex in client.list_examples(dataset_id=ds.id)}
     added = 0
-    for run in client.list_runs(project_name=PROJECT, is_root=True, limit=200):
+    # limit=100 is the API maximum -- 200 fails with
+    # "Limit exceeds maximum allowed value of 100", which is a 400, not a
+    # truncated list, so it takes the whole call down.
+    for run in client.list_runs(project_name=PROJECT, is_root=True, limit=100):
         if added >= limit:
             break
         q = (run.inputs or {}).get("question")
@@ -152,11 +155,17 @@ def promote_traces(client: Client, limit: int) -> None:
         failing = any((s or {}).get("avg") == 0.0 for s in stats.values())
         if not failing:
             continue
+        # A promoted example arrives WITHOUT ground truth, and that is the
+        # honest state: production knows the answer was suspect, not what the
+        # right answer was. `answer_is_correct` abstains until a human writes
+        # the truth_sql, which is exactly the review step the annotation queue
+        # exists for. Scoring it 0 instead would invent a failure.
         client.create_examples(
             dataset_id=ds.id, inputs=[{"question": q}],
-            outputs=[{"label": "promoted from a failing trace; add truth_sql to score it",
+            outputs=[{"label": f"promoted from run {str(run.id)[:8]}",
                       "truth_sql": ""}],
             metadata=[{"source": "promoted", "run_id": str(run.id),
+                       "needs_truth_sql": True,
                        "why": "scored 0 on a structural check in production"}])
         have.add(q)
         added += 1

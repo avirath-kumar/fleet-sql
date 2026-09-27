@@ -50,27 +50,33 @@ def main() -> int:
     from langchain_core.tracers.context import tracing_v2_enabled
 
     agent = build_agent(args.variant)
+    from langsmith import traceable
+    from observability import summarize
+
+    # Traced as ONE root run whose outputs carry the scored fields. Invoking
+    # the agent directly leaves a root run holding agent state, which every
+    # online evaluator reads as "no data" and skips.
+    @traceable(name="fleet_question", run_type="chain")
+    def ask(question: str) -> dict:
+        return summarize(agent.invoke({"messages": [{"role": "user", "content": question}]}))
+
     tag = args.tag or f"{args.variant}-traffic"
-    wrong = 0
+    spills = 0
     for i, q in enumerate(QUESTIONS[: args.limit], start=1):
         t0 = time.monotonic()
         try:
             with tracing_v2_enabled(project_name=os.environ["LANGSMITH_PROJECT"],
                                     tags=[tag, args.variant]):
-                out = agent.invoke({"messages": [{"role": "user", "content": q}]})
-            msgs = out["messages"]
-            payload = sum(len(str(m.content)) for m in msgs
-                          if getattr(m, "type", None) == "tool")
-            spill = sum("/large_tool_results/" in str(m.content) for m in msgs
-                        if getattr(m, "type", None) == "tool")
-            wrong += bool(spill)
+                summary = ask(q, langsmith_extra={"metadata": {"variant": args.variant}})
+            spills += bool(summary["spilled_tool_results"])
             print(f"  [{i:2}/{args.limit}] {time.monotonic()-t0:5.1f}s  "
-                  f"{payload:>6,} chars  {'SPILLED' if spill else '       '}  {q[:56]}")
+                  f"{summary['tool_payload_chars']:>7,} chars  "
+                  f"{'SPILLED' if summary['spilled_tool_results'] else '       '}  {q[:52]}")
         except Exception as exc:  # noqa: BLE001 - one bad run must not stop traffic
             print(f"  [{i:2}/{args.limit}] FAILED {str(exc)[:80]}")
     print(f"\n  {args.limit} runs into project "
           f"{os.environ['LANGSMITH_PROJECT']!r}, tagged {tag!r}")
-    print(f"  {wrong} spilled an oversized tool result")
+    print(f"  {spills} spilled an oversized tool result")
     return 0
 
 
