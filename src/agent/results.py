@@ -12,6 +12,7 @@ being asked.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import sqlite3
 import uuid
@@ -21,6 +22,14 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 DB_PATH = ROOT / "data" / "fleet.db"
 DIR = ROOT / ".results"
 INDEX = DIR / "index.json"
+
+#: The regression arm, kept because it is a true story rather than a contrived
+#: one. Cleaning up the receipt once collapsed two column summaries into one
+#: and dropped high-cardinality columns entirely -- and with them the
+#: cardinality. "How many distinct aircraft are affected" is exactly that
+#: number, so v2 quietly lost an answer it used to get. Nothing in review
+#: caught it; re-running the evals did.
+OMIT_DISTINCT = os.environ.get("AGENT_VARIANT", "").lower() == "v2-regressed"
 
 PREVIEW_ROWS = 5        # enough to show shape, never enough to read
 MAX_PAGE = 50           # the hardest limit here; page_result will not exceed it
@@ -119,7 +128,7 @@ def save(rows: list[dict], query_name: str, params: dict, columns: list[str] | N
         row_count=len(rows),
         columns=columns or (list(rows[0]) if rows else []),
         preview=rows[:PREVIEW_ROWS], path=str(path.relative_to(ROOT)),
-        breakdown=breakdown, distinct=distinct,
+        breakdown=breakdown, distinct={} if OMIT_DISTINCT else distinct,
         rows=rows if len(rows) <= inline_under else None,
         parent_id=parent_id, derived_by=derived_by,
     )

@@ -9,9 +9,11 @@ from __future__ import annotations
 import os
 
 from deepagents import create_deep_agent
+from deepagents.backends import FilesystemBackend
 from pydantic import BaseModel, Field
 
 import _env  # noqa: F401  (side effect: loads .env)
+import results
 from catalog import describe_catalog
 from model import build_model
 from subagents.analyst import analyze_result
@@ -69,6 +71,10 @@ When you need more:
   describe_result   column types, distinct counts, ranges.
   page_result       specific records, bounded. Ask for the columns you need.
   list_results      what has already been run, with sizes and lineage.
+  grep / ls         the offloaded rows are JSONL files in your filesystem, one
+                    object per line, named <result_id>.jsonl. grep them when
+                    you need to FIND something specific -- a tail number, a
+                    phrase in a description -- rather than count or slice it.
   analyze_result    hand a large result to an analyst subagent with a question.
   export_report     write the full set to a file and cite its path.
 
@@ -95,11 +101,23 @@ That is the correct answer, not a consolation prize."""
 
 
 def build_agent(variant: str | None = None):
+    """v1 naive | v2 offload | v2-regressed, which is v2 with a real regression.
+
+    v2-regressed has v2's tools and prompt and differs only in what the receipt
+    carries: no `distinct`. It exists so the suite can demonstrate a cleanup
+    breaking something, which is the failure evals catch and review does not.
+    """
     v = (variant or VARIANT).lower()
     tools = list(V1_TOOLS) if v == "v1" else [*V2_TOOLS, analyze_result]
     return create_deep_agent(
         model=build_model(),
         tools=tools,
+        # Rooted at .results/, NOT the project root: the agent gets ls, glob,
+        # grep and read_file over the offloaded rows and nothing else. This is
+        # the escape hatch for "find me the row that says X" -- grep is better
+        # at that than any tool I would write, and it returns matching lines
+        # rather than the file.
+        backend=FilesystemBackend(root_dir=str(results.DIR)),
         system_prompt=V1_PROMPT if v == "v1" else V2_PROMPT,
         response_format=Answer,
     )

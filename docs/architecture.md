@@ -65,7 +65,8 @@ place:
 - **`breakdown` is counted in Python** at write time. The most common follow-up
   — "how does that split?" — is answered before it is asked, with no model
   arithmetic.
-- **`path`** so the agent's own file tools can reach the rows if it must.
+- **`path`** names the file. The agent's backend is rooted at `.results/`,
+  so `grep`, `ls` and `read_file` genuinely reach it — see below.
 
 Results of 25 rows or fewer come back inline. Forcing a second call to read six
 rows is friction with no benefit.
@@ -93,6 +94,33 @@ Every modification returns a **new receipt**, never rows.
 | `page_result(result_id, offset, limit)` | rows, **capped at 50** | bounded |
 | `list_results()` | the index | bounded |
 | `export_report(result_id, title)` | a path | bounded |
+
+### Reading the actual rows
+
+Three ways, in increasing cost:
+
+| need | tool |
+|---|---|
+| "how many / how does it split" | the receipt — `row_count`, `breakdown`, `distinct` |
+| "find the ones mentioning X" | **`grep`** over `.results/<id>.jsonl` |
+| "show me some records" | `page_result`, capped at 50, with column projection |
+| "I want all of them" | `export_report` → a CSV path for the user |
+
+The backend is rooted at `.results/` rather than the project root, so the agent
+gets `ls`, `glob`, `grep` and `read_file` over the offloaded rows **and nothing
+else**. grep is the right tool for "find the row that says X" — better than
+anything hand-written, and it returns matching lines rather than the file.
+
+Measured: asked to find 737-800 deferrals mentioning a shimmy damper, the agent
+ran the query, grepped the JSONL, and answered "27 descriptions, on 26 tails,
+N155FL being the only tail with two". The database agrees exactly.
+
+`read_file` on a 140 KB result is the one path that puts rows back in context.
+It is available because occasionally it is the right answer, and because a tool
+set that forbids the expensive option tends to produce elaborate ways of
+reaching it anyway.
+
+### Filtering
 
 `filter_result` supports `eq ne in lt lte gt gte contains`, one column at a
 time, and is **chainable** — multi-condition narrowing is a sequence of

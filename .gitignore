@@ -14,5 +14,5 @@ data/fleet.db
 .results/
 .dev-logs/
 
-# Local notes.
-docs/
+# docs/ is tracked: it holds architecture.md. Scratch notes go in docs/local/.
+docs/local/

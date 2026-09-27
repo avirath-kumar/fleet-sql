@@ -61,12 +61,29 @@ that a number was counted rather than guessed.
 
 Both builds, same dataset, same harness — only the tools differ.
 
-| | v1 (naive) | v2 (offload) |
-|---|---|---|
-| `answer_is_correct` | 18/24 | **24/24** |
-| `no_silent_truncation` | 0.67 | **1.00** |
-| `rows_stayed_out_of_context` | 0.96 | **1.00** |
-| `context_efficiency` | 0.93 | **0.99** |
+Three arms, same dataset, same harness — only the tools and the receipt differ.
+
+```
+question                                  v1      v2-regressed   v2
+-------------------------------------------------------------------
+distinct 737-800 aircraft w/ open cat C   0/3     2/3            3/3
+which station carries the most deferrals  0/3     3/3            3/3
+(six other questions)                     3/3     3/3            3/3
+-------------------------------------------------------------------
+TOTAL (answer_is_correct)                 18/24   23/24          24/24
+no_silent_truncation                      0.67    1.00           1.00
+rows_stayed_out_of_context                0.96    1.00           1.00
+```
+
+**`v2-regressed` is a real regression, not a contrived one.** Cleaning up the
+receipt collapsed two column summaries into one and dropped high-cardinality
+columns entirely — and with them the cardinality. "How many distinct aircraft
+are affected" is exactly that number. The station question got *better* in the
+same change; the distinct question degraded to 2/3, intermittently. Code review
+did not catch it. Re-running the evals did.
+
+That middle column is the argument for this whole loop: it is the failure that
+passes a smoke test.
 
 Two things worth reading carefully.
 

@@ -40,7 +40,7 @@ def make_target(variant: str):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--variant", default=os.environ.get("AGENT_VARIANT", "v2"),
-                    choices=["v1", "v2"])
+                    choices=["v1", "v2", "v2-regressed"])
     ap.add_argument("--concurrency", type=int, default=2)
     ap.add_argument("--skip-upsert", action="store_true")
     #: Repetitions matter here: the naive build is non-deterministically wrong
@@ -49,6 +49,9 @@ def main() -> int:
     ap.add_argument("--repetitions", type=int, default=1)
     args = ap.parse_args()
 
+    # results.py reads AGENT_VARIANT at import time, and make_target imports
+    # the agent, so this has to be set before either happens.
+    os.environ["AGENT_VARIANT"] = args.variant
     if not args.skip_upsert:
         upsert()
     client = Client()

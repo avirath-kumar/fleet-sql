@@ -2,11 +2,14 @@
 # Score both builds against the same dataset. This is the command that
 # reproduces the comparison.
 #
-#   scripts/experiment.sh            both variants
+#   scripts/experiment.sh            all three arms
+#
+# v1 is the naive build, v2 the offload architecture, and v2-regressed is v2
+# with a real regression: a receipt cleanup that dropped distinct counts.
 #   scripts/experiment.sh v2         just one
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VARIANTS=("$@"); [ "$#" -eq 0 ] && VARIANTS=(v1 v2)
+VARIANTS=("$@"); [ "$#" -eq 0 ] && VARIANTS=(v1 v2-regressed v2)
 
 # Upsert once, before either run: both variants must score the same examples.
 "$ROOT/.venv/bin/python" "$ROOT/evals/dataset.py"
