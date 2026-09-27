@@ -80,15 +80,32 @@ finding. The naive build never blows the context budget, because the harness
 spills the oversized result to a file first. It stays cheap and becomes wrong.
 Measuring only context size would have shown no problem at all.
 
-The two failures are both questions the query catalogue cannot answer directly:
+### Is it consistent?
+
+Three repetitions, 24 scored runs per build:
+
+| | v1 | v2 |
+|---|---|---|
+| `answer_is_correct` | 20/24 | **24/24** |
+
+Per example, only two move:
 
 | question | database | v1 | v2 |
 |---|---|---|---|
-| distinct 737-800 aircraft with an open category C deferral | 107 | 126 | 107 |
-| station with the most open deferrals | 105 | 118 | 105 |
+| which station carries the most open deferrals | 105 | **0/3** | 3/3 |
+| distinct 737-800 aircraft with an open category C deferral | 107 | **2/3** | 3/3 |
 
-When a pre-aggregated query exists, the naive build calls it and is fine. The
-architecture earns its keep exactly where the catalogue runs out.
+Read that carefully, because the two failures are not the same kind:
+
+- the station question fails **every time** — that is the architectural failure
+- the distinct-count question **flakes**: right once, wrong twice
+- the other six pass on both builds, every time
+
+So the claim worth making is "v2 is reliable and v1 is not", not "v1 is broken".
+When the catalogue has a pre-aggregated query, the naive build calls it and is
+fine. The architecture earns its keep exactly where the catalogue runs out —
+and a single pass cannot tell the hard failure from the flaky one, which is why
+`scripts/consistency.py` exists.
 
 ## The loop
 

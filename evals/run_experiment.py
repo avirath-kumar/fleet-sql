@@ -43,6 +43,10 @@ def main() -> int:
                     choices=["v1", "v2"])
     ap.add_argument("--concurrency", type=int, default=2)
     ap.add_argument("--skip-upsert", action="store_true")
+    #: Repetitions matter here: the naive build is non-deterministically wrong
+    #: (118 on one run, 103 on another), so a single pass cannot tell a real
+    #: failure from a coin flip.
+    ap.add_argument("--repetitions", type=int, default=1)
     args = ap.parse_args()
 
     if not args.skip_upsert:
@@ -54,7 +58,8 @@ def main() -> int:
         evaluators=ALL,
         experiment_prefix=f"fleet-{args.variant}",
         max_concurrency=args.concurrency,
-        metadata={"variant": args.variant},
+        num_repetitions=args.repetitions,
+        metadata={"variant": args.variant, "repetitions": args.repetitions},
     )
     name = getattr(result, "experiment_name", "")
     print(f"\nEXPERIMENT_NAME={name}")
