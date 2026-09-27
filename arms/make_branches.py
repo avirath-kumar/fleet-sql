@@ -109,8 +109,8 @@ def build_regressed() -> None:
          "        breakdown=breakdown, distinct={} if OMIT_DISTINCT else distinct,",
          "        breakdown=breakdown,")
     edit("src/agent/agent.py",
-         "  distinct    \"how many distinct aircraft are affected\" -- the cardinality of\n"
-         "              a column too varied to break down, already counted for you\n", "")
+         '  distinct    "how many distinct aircraft are affected" \u2014 the cardinality of a\n'
+         "              column too varied to break down, already counted for you\n", "")
 
 
 BRANCHES = {"demo/naive": build_naive, "demo/regressed": build_regressed}

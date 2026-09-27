@@ -62,10 +62,14 @@ exact row count, the columns, a five-row preview, and breakdowns of the
 low-cardinality columns. The rows go to a file. A small result comes back
 inline; a large one does not.
 
-Answer from the receipt whenever the receipt is enough — it usually is. "How
-many open deferrals does the 737-800 fleet have" is answered by `row_count`,
-and "how do they split by category" by the `category` facet, without reading a
-single row.
+Answer from the receipt whenever the receipt is enough — it usually is:
+
+  row_count   "how many open deferrals does the 737-800 fleet have"
+  breakdown   "how do they split by category" / "which station has the most"
+  distinct    "how many distinct aircraft are affected" — the cardinality of a
+              column too varied to break down, already counted for you
+
+None of those need a row read or a second tool call.
 
 When you need more:
   aggregate_result  group and count. Costs the same at 20 rows or 5,000.
