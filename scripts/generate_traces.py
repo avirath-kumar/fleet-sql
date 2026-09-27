@@ -50,20 +50,11 @@ def main() -> int:
     from langchain_core.tracers.context import tracing_v2_enabled
 
     agent = build_agent(args.variant)
-    from langsmith import traceable
-
-    #: One root run per question, so the online evaluators have a run whose
-    #: outputs they can read. The FIELDS come from agent state (see
-    #: middleware/run_cost.py); this only decides what counts as the root.
-    SCORED = ("tool_payload_chars", "total_tokens", "harness_evicted_results", "tool_calls")
-
-    @traceable(name="fleet_question", run_type="chain")
-    def ask(question: str) -> dict:
-        out = agent.invoke({"messages": [{"role": "user", "content": question}]})
-        answer = out.get("structured_response")
-        return {"structured_response": answer.model_dump() if answer is not None else {},
-                **{k: out.get(k, 0) for k in SCORED}}
-
+    #: No wrapper. The agent IS the root run, so its outputs are its state:
+    #: `messages` (prose, thanks to readable_answer) plus structured_response
+    #: and the run-cost fields. LangSmith renders a Messages view when outputs
+    #: carry `messages`, and a wrapper returning a bare dict rendered as
+    #: generic Fields instead -- which is what this used to do.
     tag = args.tag or f"{args.variant}-traffic"
     evicted = 0
     for i, q in enumerate(QUESTIONS[: args.limit], start=1):
@@ -71,11 +62,11 @@ def main() -> int:
         try:
             with tracing_v2_enabled(project_name=os.environ["LANGSMITH_PROJECT"],
                                     tags=[tag, args.variant]):
-                summary = ask(q, langsmith_extra={"metadata": {"variant": args.variant}})
-            evicted += bool(summary["harness_evicted_results"])
+                out = agent.invoke({"messages": [{"role": "user", "content": q}]})
+            evicted += bool(out.get("harness_evicted_results"))
             print(f"  [{i:2}/{args.limit}] {time.monotonic()-t0:5.1f}s  "
-                  f"{summary['tool_payload_chars']:>7,} chars  "
-                  f"{'EVICTED' if summary['harness_evicted_results'] else '       '}  {q[:52]}")
+                  f"{out.get('tool_payload_chars', 0):>7,} chars  "
+                  f"{'EVICTED' if out.get('harness_evicted_results') else '       '}  {q[:52]}")
         except Exception as exc:  # noqa: BLE001 - one bad run must not stop traffic
             print(f"  [{i:2}/{args.limit}] FAILED {str(exc)[:80]}")
     print(f"\n  {args.limit} runs into project "

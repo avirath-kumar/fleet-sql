@@ -34,7 +34,11 @@ def make_target(variant: str):
     def target(inputs: dict) -> dict:
         out = agent.invoke({"messages": [{"role": "user", "content": inputs["question"]}]})
         answer = out.get("structured_response")
+        # `messages` first: LangSmith renders a Messages view when outputs carry
+        # it, and a dict without it renders as generic Fields. readable_answer
+        # has already made the last message prose rather than the JSON blob.
         return {
+            "messages": out.get("messages", []),
             "structured_response": answer.model_dump() if answer is not None else {},
             **{k: out.get(k, 0) for k in
                ("tool_payload_chars", "total_tokens", "harness_evicted_results", "tool_calls")},

@@ -202,33 +202,44 @@ and the result is smaller, earlier and more informative.
 
 ## What a trace shows
 
-`response_format=Answer` makes the structured output the final message, so
-without intervention the Messages view of every trace ends in this:
+LangSmith renders a **Messages view** when a run's outputs carry a `messages`
+array, and generic Fields otherwise. Getting there took fixing two layers, and
+the first fix alone did nothing visible.
+
+**The message content.** `response_format=Answer` makes the structured output
+the final message, so without intervention it reads:
 
     {"answer":"The 747-8 fleet has 12 aircraft...","counts":[{"label":...
 
-The answer is in there, wrapped in the fields around it. `readable_answer`
-rewrites that message's content with the prose, by returning an AIMessage with
-**the same id** -- `add_messages` treats a repeated id as an overwrite rather
-than an append. Appending a second message does not work: the blob remains,
-still above the readable one.
+`readable_answer` rewrites that message's content with the prose, returning an
+AIMessage with **the same id** -- `add_messages` treats a repeated id as an
+overwrite. Appending a second message does not work: the blob remains, above
+the readable one.
 
-The result is the split a trace wants:
+**The root run.** That fix changed the agent's messages, but the root run was a
+`@traceable` wrapper returning a bare dict with no `messages` key at all, so
+the trace still rendered as a field tree. The wrapper only existed to compute
+the cost fields -- and once those moved into state (below), it had no reason to
+exist. Deleting it makes the agent itself the root run, whose outputs are its
+state:
 
-| where | what |
-|---|---|
-| `messages[-1]` | the prose answer, and nothing else |
-| `structured_response` | `counts`, `result_ids`, `report_path` |
-| run state | `tool_payload_chars`, `total_tokens`, `harness_evicted_results` |
+```
+messages              prose, via readable_answer
+structured_response   counts, result_ids, report_path
+tool_payload_chars, total_tokens, harness_evicted_results, tool_calls
+```
 
-Nothing is lost, which matters here specifically: `answer_is_correct` reads
-`counts` off `structured_response` to check a figure against the database, and
-never looks at `messages`. Verified after the change -- all four evaluators
-score the new shape unchanged.
+Which is exactly the shape asked for: one field for rendering, everything
+structured beside it. Verified on both paths -- live traffic and experiment
+runs each carry four messages ending in prose, and all four evaluators score
+the new shape unchanged.
 
-Three guards keep it from damaging a transcript. It fires only when there is
-prose to show, only on an AI message, and only when that message's text starts
-with `{` -- so a real turn is never overwritten.
+Nothing is lost, which matters because `answer_is_correct` reads `counts` off
+`structured_response` to check a figure against the database and never looks at
+`messages`.
+
+Three guards keep `readable_answer` from damaging a transcript: prose must
+exist, the message must be an AI turn, and its text must start with `{`.
 
 ## What the run cost, and where it lives
 
