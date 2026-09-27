@@ -35,6 +35,13 @@ MAX_PAGE = 50
 MAX_FACET_VALUES = 8
 
 
+#: A registry of every result this session produced, so a handle outlives the
+#: message that carried it. Without this a receipt is only as durable as the
+#: conversation: compact the history and the id is gone while the file is still
+#: on disk, orphaned.
+INDEX_PATH = RESULTS_DIR / "index.json"
+
+
 @dataclass
 class Receipt:
     """What a query returns instead of its rows."""
@@ -52,6 +59,16 @@ class Receipt:
     path: str = ""
     #: Set when the result is small enough that withholding it would be silly.
     rows: list[dict] | None = None
+    #: Lineage. A filtered result records what it came from and how, so the
+    #: agent can widen again instead of re-running the query -- and so "undo
+    #: that last filter" is a thing it can actually do.
+    parent_id: str | None = None
+    derived_by: str | None = None
+    #: What you can still do to this result: column -> the values present.
+    #: Named as an affordance rather than left implicit in `facets`, because a
+    #: receipt that only says "511 rows" tells the agent the job is done. This
+    #: says which adjustments are available without reading a row.
+    refinable: dict[str, list[str]] = field(default_factory=dict)
 
     def to_tool_result(self) -> dict:
         d = asdict(self)
@@ -64,6 +81,49 @@ def _connect() -> sqlite3.Connection:
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     return con
+
+
+def _refinable(rows: list[dict], wanted: tuple[str, ...]) -> dict[str, list[str]]:
+    """Columns worth narrowing on, and the values actually present.
+
+    Bounded by MAX_FACET_VALUES: a column with more distinct values than that
+    is omitted rather than truncated, because a half-listed set of options
+    invites the agent to assume the ones it cannot see do not exist.
+    """
+    out: dict[str, list[str]] = {}
+    for col in wanted:
+        vals = sorted({str(r.get(col)) for r in rows if r.get(col) is not None})
+        if 1 < len(vals) <= MAX_FACET_VALUES:
+            out[col] = vals
+    return out
+
+
+def _record(receipt: "Receipt") -> None:
+    """Append a result to the session registry."""
+    import json as _json
+    index = {}
+    if INDEX_PATH.exists():
+        try:
+            index = _json.loads(INDEX_PATH.read_text())
+        except Exception:
+            index = {}
+    index[receipt.result_id] = {
+        "query_id": receipt.query_id, "params": receipt.params,
+        "row_count": receipt.row_count, "columns": receipt.columns,
+        "parent_id": receipt.parent_id, "derived_by": receipt.derived_by,
+    }
+    INDEX_PATH.write_text(_json.dumps(index, indent=1, default=str))
+
+
+def known_results() -> dict:
+    """Everything produced this session, newest last."""
+    import json as _json
+    if not INDEX_PATH.exists():
+        return {}
+    try:
+        return _json.loads(INDEX_PATH.read_text())
+    except Exception:
+        return {}
 
 
 def _facets(rows: list[dict], columns: list[str], wanted: tuple[str, ...]) -> dict:
@@ -108,7 +168,7 @@ def materialize(query_id: str, params: dict, sql: str, facets: tuple[str, ...],
         for r in rows:
             fh.write(json.dumps(r, default=str) + "\n")
 
-    return Receipt(
+    receipt = Receipt(
         result_id=result_id,
         query_id=query_id,
         params=params,
@@ -118,7 +178,10 @@ def materialize(query_id: str, params: dict, sql: str, facets: tuple[str, ...],
         facets=_facets(rows, columns, facets),
         path=str(path.relative_to(ROOT)),
         rows=rows if len(rows) <= inline_under else None,
+        refinable=_refinable(rows, facets),
     )
+    _record(receipt)
+    return receipt
 
 
 def load(result_id: str) -> list[dict]:
@@ -131,7 +194,8 @@ def load(result_id: str) -> list[dict]:
 
 
 def store(rows: list[dict], query_id: str, params: dict,
-          facets: tuple[str, ...] = ()) -> Receipt:
+          facets: tuple[str, ...] = (), parent_id: str | None = None,
+          derived_by: str | None = None) -> Receipt:
     """Persist rows that were derived in-process (a filter, a sort) as a result
     in their own right, so a narrowed set can be narrowed again."""
     RESULTS_DIR.mkdir(exist_ok=True)
@@ -141,9 +205,13 @@ def store(rows: list[dict], query_id: str, params: dict,
         for r in rows:
             fh.write(json.dumps(r, default=str) + "\n")
     columns = list(rows[0].keys()) if rows else []
-    return Receipt(
+    receipt = Receipt(
         result_id=result_id, query_id=query_id, params=params,
         row_count=len(rows), columns=columns, preview=rows[:PREVIEW_ROWS],
         facets=_facets(rows, columns, facets), path=str(path.relative_to(ROOT)),
         rows=rows if len(rows) <= 25 else None,
+        parent_id=parent_id, derived_by=derived_by,
+        refinable=_refinable(rows, facets),
     )
+    _record(receipt)
+    return receipt

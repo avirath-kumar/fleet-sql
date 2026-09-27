@@ -109,3 +109,42 @@ def test_v1_returns_every_row():
                                  "params": {"model": "737-800"}})
     assert len(r["rows"]) == r["row_count"] > 400
     assert len(json.dumps(r["rows"])) > 100_000
+
+
+def test_filter_records_lineage_and_widen_reverses_it():
+    """The gap that made 'narrow that' a one-way door."""
+    from tools.query import widen_result
+    big = run_query.invoke({"query_id": "open_deferrals_by_fleet",
+                            "params": {"model": "737-800"}})
+    narrowed = filter_result.invoke({"result_id": big["result_id"],
+                                     "column": "station_code", "op": "eq", "value": "ORD"})
+    assert narrowed["parent_id"] == big["result_id"]
+    assert narrowed["derived_by"] == "station_code eq ORD"
+    back = widen_result.invoke({"result_id": narrowed["result_id"]})
+    assert back["result_id"] == big["result_id"]
+    assert back["row_count"] == big["row_count"]
+    assert back["undid"] == "station_code eq ORD"
+
+
+def test_receipt_advertises_what_can_be_adjusted():
+    """A receipt that only says '511 rows' reads as 'job done'."""
+    big = run_query.invoke({"query_id": "open_deferrals_by_fleet",
+                            "params": {"model": "737-800"}})
+    assert set(big["refinable"]) >= {"category", "station_code"}
+    assert big["refinable"]["category"] == ["A", "B", "C", "D"]
+
+
+def test_results_outlive_the_message_that_carried_them():
+    """A handle from an earlier turn is still usable."""
+    from tools.query import list_results
+    big = run_query.invoke({"query_id": "open_deferrals_by_fleet",
+                            "params": {"model": "737-800"}})
+    known = list_results.invoke({})
+    assert any(r["result_id"] == big["result_id"] for r in known["results"])
+
+
+def test_widen_on_an_original_result_says_so_rather_than_failing():
+    big = run_query.invoke({"query_id": "top_level_config_slots", "params": {"model": "747-8"}})
+    from tools.query import widen_result
+    out = widen_result.invoke({"result_id": big["result_id"]})
+    assert "nothing to widen" in out["note"]
