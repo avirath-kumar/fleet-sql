@@ -107,19 +107,21 @@ def context_efficiency(run: Any, example: Any = None) -> dict:
 def no_silent_truncation(run: Any, example: Any = None) -> dict:
     """Did the agent hand off an oversized payload to something untyped?
 
-    The harness spills a large tool result to /large_tool_results/ and the agent
-    then reads it back, usually by delegating with a prose `task` string. That
-    path is where the wrong numbers came from, so it is worth scoring on its
-    own rather than inferring it from the payload size.
+    When the context overflows, deepagents evicts the offending tool result to
+    /large_tool_results/ and the agent reads it back, usually by delegating with
+    a prose `task` string. That path is where the wrong numbers came from. It is
+    scored separately from payload size because the two do not coincide: a
+    135,761-char result went straight into context without ever being evicted,
+    because nothing had overflowed yet.
     """
     out = getattr(run, "outputs", None) or {}
-    spilled = out.get("spilled_tool_results")
-    if spilled is None:
+    evicted = out.get("harness_evicted_results")
+    if evicted is None:
         return {"key": "no_silent_truncation", "score": None,
-                "comment": "target did not report spills"}
-    return {"key": "no_silent_truncation", "score": 0.0 if spilled else 1.0,
-            "comment": (f"{spilled} tool result(s) spilled to a file and re-read"
-                        if spilled else "no oversized tool result")}
+                "comment": "target did not report evictions"}
+    return {"key": "no_silent_truncation", "score": 0.0 if evicted else 1.0,
+            "comment": (f"{evicted} tool result(s) evicted by the harness after an "
+                        f"overflow, then re-read" if evicted else "no result needed evicting")}
 
 
 ALL = [answer_is_correct, rows_stayed_out_of_context, context_efficiency, no_silent_truncation]

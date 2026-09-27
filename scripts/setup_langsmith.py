@@ -49,10 +49,10 @@ ONLINE_EVALUATORS = {
 def perform_eval(run):
     """1 when no tool result was too big to inline."""
     out = run.get("outputs") or {}
-    spilled = out.get("spilled_tool_results")
-    if spilled is None:
+    evicted = out.get("harness_evicted_results")
+    if evicted is None:
         return {"no_silent_truncation": None}
-    return {"no_silent_truncation": 0.0 if spilled else 1.0}
+    return {"no_silent_truncation": 0.0 if evicted else 1.0}
 ''',
     "rows_stayed_out_of_context": '''
 def perform_eval(run):

@@ -23,7 +23,7 @@ from langsmith import Client  # noqa: E402
 
 from evals.dataset import DATASET_NAME, upsert  # noqa: E402
 from evals.evaluators import ALL  # noqa: E402
-from observability import summarize  # noqa: E402
+from run_summary import summarize  # noqa: E402
 
 def make_target(variant: str):
     from agent import build_agent

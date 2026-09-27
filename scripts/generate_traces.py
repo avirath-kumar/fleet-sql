@@ -51,7 +51,7 @@ def main() -> int:
 
     agent = build_agent(args.variant)
     from langsmith import traceable
-    from observability import summarize
+    from run_summary import summarize
 
     # Traced as ONE root run whose outputs carry the scored fields. Invoking
     # the agent directly leaves a root run holding agent state, which every
@@ -61,22 +61,22 @@ def main() -> int:
         return summarize(agent.invoke({"messages": [{"role": "user", "content": question}]}))
 
     tag = args.tag or f"{args.variant}-traffic"
-    spills = 0
+    evicted = 0
     for i, q in enumerate(QUESTIONS[: args.limit], start=1):
         t0 = time.monotonic()
         try:
             with tracing_v2_enabled(project_name=os.environ["LANGSMITH_PROJECT"],
                                     tags=[tag, args.variant]):
                 summary = ask(q, langsmith_extra={"metadata": {"variant": args.variant}})
-            spills += bool(summary["spilled_tool_results"])
+            evicted += bool(summary["harness_evicted_results"])
             print(f"  [{i:2}/{args.limit}] {time.monotonic()-t0:5.1f}s  "
                   f"{summary['tool_payload_chars']:>7,} chars  "
-                  f"{'SPILLED' if summary['spilled_tool_results'] else '       '}  {q[:52]}")
+                  f"{'EVICTED' if summary['harness_evicted_results'] else '       '}  {q[:52]}")
         except Exception as exc:  # noqa: BLE001 - one bad run must not stop traffic
             print(f"  [{i:2}/{args.limit}] FAILED {str(exc)[:80]}")
     print(f"\n  {args.limit} runs into project "
           f"{os.environ['LANGSMITH_PROJECT']!r}, tagged {tag!r}")
-    print(f"  {spills} spilled an oversized tool result")
+    print(f"  {evicted} needed the harness to evict an oversized result")
     return 0
 
 

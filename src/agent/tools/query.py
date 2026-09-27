@@ -89,9 +89,8 @@ def run_query_inline(query_id: str, params: dict | None = None) -> dict:
     """
     q = _lookup(query_id)
     bound = _check_params(q, params or {})
-    receipt = results.materialize(q.id, bound, q.sql, q.facets, inline_under=10**9)
-    return {"query_id": q.id, "params": bound,
-            "row_count": receipt.row_count, "rows": receipt.rows}
+    columns, rows = results.query(q.sql, bound)
+    return {"query_id": q.id, "params": bound, "row_count": len(rows), "rows": rows}
 
 
 # --- v2: receipt plus targeted tools ---------------------------------------
@@ -112,7 +111,8 @@ def run_query(query_id: str, params: dict | None = None) -> dict:
     """
     q = _lookup(query_id)
     bound = _check_params(q, params or {})
-    return results.materialize(q.id, bound, q.sql, q.facets).to_tool_result()
+    columns, rows = results.query(q.sql, bound)
+    return results.save(rows, q.id, bound, columns).payload()
 
 
 @tool(parse_docstring=True)
@@ -175,12 +175,10 @@ def filter_result(result_id: str, column: str,
         return {"lt": a < b, "lte": a <= b, "gt": a > b, "gte": a >= b}[op]
 
     kept = [r for r in rows if keep(r)]
-    facets = tuple(k for k in (rows[0] if rows else {}) if k != column)
-    receipt = results.store(kept, f"filter({result_id})",
-                            {"column": column, "op": op, "value": value}, facets[:4],
-                            parent_id=result_id,
-                            derived_by=f"{column} {op} {value}")
-    return receipt.to_tool_result()
+    return results.save(kept, f"filter({result_id})",
+                        {"column": column, "op": op, "value": value},
+                        parent_id=result_id,
+                        derived_by=f"{column} {op} {value}").payload()
 
 
 @tool(parse_docstring=True)
@@ -273,40 +271,16 @@ def list_results() -> dict:
     Use this when a question refers to something already run -- "narrow that to
     ORD", "go back to the full set" -- instead of re-running the query. A
     result id from an earlier turn is still valid; the rows are on disk.
+
+    `parent_id` and `derived_by` give a filtered result's lineage, so reverting
+    a filter means naming its parent rather than re-querying.
     """
-    index = results.known_results()
+    index = results.known()
     return {"count": len(index),
             "results": [{"result_id": rid, **info} for rid, info in index.items()]}
 
 
-@tool(parse_docstring=True)
-@_guard
-def widen_result(result_id: str) -> dict:
-    """Step back to what a filtered result was derived from.
-
-    The inverse of filter_result. Narrowing too far is the common mistake and
-    without this the only way back is to re-run the original query, which the
-    agent often does with different parameters.
-
-    Args:
-        result_id: A result produced by filter_result.
-    """
-    index = results.known_results()
-    info = index.get(result_id)
-    if info is None:
-        raise ToolInputError(f"no such result: {result_id}")
-    parent = info.get("parent_id")
-    if not parent:
-        return {"result_id": result_id, "note": "already the original result; nothing to widen to",
-                "row_count": info.get("row_count")}
-    pinfo = index.get(parent, {})
-    return {"result_id": parent, "row_count": pinfo.get("row_count"),
-            "query_id": pinfo.get("query_id"), "params": pinfo.get("params"),
-            "undid": info.get("derived_by"),
-            "note": f"stepped back from {result_id}"}
-
-
 V1_TOOLS = [run_query_inline]
 V2_TOOLS = [run_query, describe_result, filter_result, aggregate_result,
-            page_result, export_report, list_results, widen_result]
+            page_result, export_report, list_results]
 TOOLS = V1_TOOLS if VARIANT == "v1" else V2_TOOLS

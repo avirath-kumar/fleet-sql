@@ -66,7 +66,6 @@ single row.
 When you need more:
   aggregate_result  group and count. Costs the same at 20 rows or 5,000.
   filter_result     narrow to a new result; chain it to narrow again.
-  widen_result      step back to what a filtered result came from.
   describe_result   column types, distinct counts, ranges.
   page_result       specific records, bounded. Ask for the columns you need.
   list_results      what has already been run, with sizes and lineage.
@@ -75,13 +74,14 @@ When you need more:
 
 RESULTS PERSIST. A result id stays valid after the turn that made it. When a
 follow-up refers to something already run -- "narrow that to ORD", "what about
-category A", "go back to all of them" -- call list_results to find it and
-filter or widen from there. Re-running the query is wrong: it costs a round
+category A", "go back to all of them" -- call list_results to find it. A
+filtered result lists its `parent_id`, so reverting a filter means filtering
+from the parent, not re-running the query. Re-running the query is wrong: it costs a round
 trip and, if you guess different parameters, silently answers a different
 question.
 
-TELL THE USER WHAT THEY CAN ADJUST. Every receipt carries `refinable`: the
-columns worth narrowing on and the values actually present. When you hand back
+TELL THE USER WHAT THEY CAN ADJUST. Every receipt carries `breakdown`: its keys
+are the columns worth narrowing on, and their keys are the values present. When you hand back
 a count or a report, say what the options are -- "511 open, across six stations
 and four categories; I can break it down or narrow to any of them" -- rather
 than stopping at the number. A user who cannot see the axes cannot ask for the

@@ -12,7 +12,7 @@ than generated SQL:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 ParamType = Literal["tail_number", "model", "station", "int", "category", "ata"]
@@ -34,8 +34,6 @@ class Query:
     #: Rough upper bound on rows, used to plan. `unbounded` means the row count
     #: scales with fleet size and can exceed anything that belongs in context.
     size: Literal["small", "medium", "unbounded"] = "small"
-    #: Columns worth grouping on when a result turns out to be too large.
-    facets: tuple[str, ...] = field(default_factory=tuple)
 
 
 CATALOG: dict[str, Query] = {q.id: q for q in (
@@ -58,7 +56,6 @@ CATALOG: dict[str, Query] = {q.id: q for q in (
         summary="Top-level configuration slots for a model (parent slot is null).",
         params=(Param("model", "model", "Aircraft model, e.g. '747-8'"),),
         size="small",
-        facets=("ata_chapter",),
         sql="""
             SELECT slot_id, slot_code, name, ata_chapter
               FROM config_slots
@@ -71,7 +68,6 @@ CATALOG: dict[str, Query] = {q.id: q for q in (
         summary="Every configuration slot and its value for one aircraft.",
         params=(Param("tail_number", "tail_number", "Registration, e.g. 'N101FL'"),),
         size="medium",
-        facets=("ata_chapter", "value"),
         sql="""
             SELECT s.slot_code, s.name, s.ata_chapter, c.value, c.effective_date
               FROM aircraft_config c JOIN config_slots s USING (slot_id)
@@ -84,7 +80,6 @@ CATALOG: dict[str, Query] = {q.id: q for q in (
         summary="Open and extended deferrals on one aircraft.",
         params=(Param("tail_number", "tail_number", "Registration, e.g. 'N101FL'"),),
         size="small",
-        facets=("category", "ata_chapter"),
         sql="""
             SELECT deferral_id, mel_ref, category, ata_chapter, description,
                    opened_date, due_date, status, station_code
@@ -99,7 +94,6 @@ CATALOG: dict[str, Query] = {q.id: q for q in (
                 "Large: a mainline narrowbody fleet returns several hundred rows.",
         params=(Param("model", "model", "Aircraft model, e.g. '737-800'"),),
         size="unbounded",
-        facets=("category", "ata_chapter", "station_code", "tail_number"),
         sql="""
             SELECT d.deferral_id, d.tail_number, d.mel_ref, d.category, d.ata_chapter,
                    d.description, d.opened_date, d.due_date, d.status, d.station_code
@@ -113,7 +107,6 @@ CATALOG: dict[str, Query] = {q.id: q for q in (
         summary="Open deferrals falling due within N days, fleet-wide. Large.",
         params=(Param("days", "int", "Horizon in days, e.g. 7"),),
         size="unbounded",
-        facets=("category", "model", "station_code"),
         sql="""
             SELECT d.deferral_id, d.tail_number, a.model, d.category, d.ata_chapter,
                    d.description, d.due_date, d.status, d.station_code
@@ -141,7 +134,6 @@ CATALOG: dict[str, Query] = {q.id: q for q in (
         summary="Every aircraft of a model, with base and status.",
         params=(Param("model", "model", "Aircraft model, e.g. '747-8'"),),
         size="medium",
-        facets=("status", "base_station", "operator_id"),
         sql="""
             SELECT a.tail_number, a.operator_id, a.base_station, a.delivery_date, a.status
               FROM aircraft a WHERE a.model = :model ORDER BY a.tail_number
@@ -153,7 +145,6 @@ CATALOG: dict[str, Query] = {q.id: q for q in (
         params=(Param("model", "model", "Aircraft model"),
                 Param("ata_chapter", "ata", "ATA chapter number, e.g. 25")),
         size="medium",
-        facets=("category", "tail_number"),
         sql="""
             SELECT d.deferral_id, d.tail_number, d.mel_ref, d.category,
                    d.description, d.due_date, d.status
@@ -168,7 +159,6 @@ CATALOG: dict[str, Query] = {q.id: q for q in (
         summary="Aircraft based at a station, any model.",
         params=(Param("station_code", "station", "IATA code, e.g. 'MEM'"),),
         size="medium",
-        facets=("model", "status"),
         sql="""
             SELECT a.tail_number, a.model, a.operator_id, a.status
               FROM aircraft a WHERE a.base_station = :station_code

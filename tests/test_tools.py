@@ -30,7 +30,7 @@ def test_receipt_is_small_whatever_the_result_size(big):
     """The property the whole design rests on."""
     assert big["row_count"] > 400
     assert "rows" not in big                      # rows withheld
-    assert len(json.dumps(big)) < 4_000           # receipt stays tiny
+    assert len(json.dumps(big)) < 5_000           # receipt stays tiny
 
 
 def test_receipt_carries_the_exact_count(big):
@@ -111,27 +111,36 @@ def test_v1_returns_every_row():
     assert len(json.dumps(r["rows"])) > 100_000
 
 
-def test_filter_records_lineage_and_widen_reverses_it():
-    """The gap that made 'narrow that' a one-way door."""
-    from tools.query import widen_result
+def test_filter_records_lineage_so_it_can_be_reverted():
+    """The gap that made 'narrow that' a one-way door: without a parent, going
+    back means re-running the query, often with different parameters."""
+    from tools.query import list_results
     big = run_query.invoke({"query_id": "open_deferrals_by_fleet",
                             "params": {"model": "737-800"}})
     narrowed = filter_result.invoke({"result_id": big["result_id"],
                                      "column": "station_code", "op": "eq", "value": "ORD"})
     assert narrowed["parent_id"] == big["result_id"]
     assert narrowed["derived_by"] == "station_code eq ORD"
-    back = widen_result.invoke({"result_id": narrowed["result_id"]})
-    assert back["result_id"] == big["result_id"]
-    assert back["row_count"] == big["row_count"]
-    assert back["undid"] == "station_code eq ORD"
+    listed = {r["result_id"]: r for r in list_results.invoke({})["results"]}
+    assert listed[narrowed["result_id"]]["parent_id"] == big["result_id"]
 
 
 def test_receipt_advertises_what_can_be_adjusted():
-    """A receipt that only says '511 rows' reads as 'job done'."""
+    """A receipt that only says '511 rows' reads as 'job done'. The breakdown
+    keys are the columns you can filter on; the inner keys are the values."""
     big = run_query.invoke({"query_id": "open_deferrals_by_fleet",
                             "params": {"model": "737-800"}})
-    assert set(big["refinable"]) >= {"category", "station_code"}
-    assert big["refinable"]["category"] == ["A", "B", "C", "D"]
+    assert set(big["breakdown"]) >= {"category", "station_code", "status"}
+    assert set(big["breakdown"]["category"]) == {"A", "B", "C", "D"}
+
+
+def test_breakdown_is_derived_from_data_not_declared():
+    """`status` is refinable and no query declares it. The old design keyed off
+    a per-query facet list, so a column nobody listed was invisible."""
+    big = run_query.invoke({"query_id": "open_deferrals_by_fleet",
+                            "params": {"model": "737-800"}})
+    assert "status" in big["breakdown"]
+    assert "deferral_id" not in big["breakdown"]      # 511 distinct: not a facet
 
 
 def test_results_outlive_the_message_that_carried_them():
@@ -143,8 +152,6 @@ def test_results_outlive_the_message_that_carried_them():
     assert any(r["result_id"] == big["result_id"] for r in known["results"])
 
 
-def test_widen_on_an_original_result_says_so_rather_than_failing():
+def test_an_original_result_has_no_parent():
     big = run_query.invoke({"query_id": "top_level_config_slots", "params": {"model": "747-8"}})
-    from tools.query import widen_result
-    out = widen_result.invoke({"result_id": big["result_id"]})
-    assert "nothing to widen" in out["note"]
+    assert big["parent_id"] is None
