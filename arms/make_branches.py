@@ -103,11 +103,8 @@ def build_regressed() -> None:
     cardinality. Nothing in review caught it.
     """
     edit("src/agent/results.py",
-         "    breakdown, distinct = _summarize_columns(rows)",
-         "    breakdown, _distinct = _summarize_columns(rows)")
-    edit("src/agent/results.py",
          "        breakdown=breakdown, distinct={} if OMIT_DISTINCT else distinct,",
-         "        breakdown=breakdown,")
+         "        breakdown=breakdown, distinct={},")
     edit("src/agent/agent.py",
          '  distinct    "how many distinct aircraft are affected" \u2014 the cardinality of a\n'
          "              column too varied to break down, already counted for you\n", "")
@@ -129,7 +126,17 @@ def main() -> int:
 
     for branch, build in BRANCHES.items():
         sh("checkout", "--quiet", "-B", branch, "main")
-        build()
+        try:
+            build()
+        except SystemExit:
+            # A failed build leaves the tree half-edited. Reset it and get off
+            # the branch before re-raising, or those edits ride back to main on
+            # the next checkout -- which happened, and put the regression this
+            # script is supposed to CREATE onto main, where it was committed.
+            sh("checkout", "--quiet", "--", ".")
+            sh("clean", "--quiet", "-fd")
+            sh("checkout", "--quiet", "main")
+            raise
         sh("add", "-A")
         sh("-c", "user.email=demo@fleet-sql.local", "-c", "user.name=fleet-sql",
            "commit", "--quiet", "-m",

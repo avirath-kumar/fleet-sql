@@ -122,13 +122,13 @@ def save(rows: list[dict], query_name: str, params: dict, columns: list[str] | N
         for r in rows:
             fh.write(json.dumps(r, default=str) + "\n")
 
-    breakdown, _distinct = _summarize_columns(rows)
+    breakdown, distinct = _summarize_columns(rows)
     result = Result(
         result_id=result_id, query=query_name, params=params,
         row_count=len(rows),
         columns=columns or (list(rows[0]) if rows else []),
         preview=rows[:PREVIEW_ROWS], path=str(path.relative_to(ROOT)),
-        breakdown=breakdown,
+        breakdown=breakdown, distinct={} if OMIT_DISTINCT else distinct,
         rows=rows if len(rows) <= inline_under else None,
         parent_id=parent_id, derived_by=derived_by,
     )
