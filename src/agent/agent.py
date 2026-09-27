@@ -17,6 +17,7 @@ import results
 from catalog import describe_catalog
 from model import build_model
 from subagents.analyst import analyze_result
+from middleware.run_cost import RunCost, run_cost
 from tools.query import V1_TOOLS, V2_TOOLS
 
 VARIANT = os.environ.get("AGENT_VARIANT", "v2").lower()
@@ -118,6 +119,11 @@ def build_agent(variant: str | None = None):
         # at that than any tool I would write, and it returns matching lines
         # rather than the file.
         backend=FilesystemBackend(root_dir=str(results.DIR)),
+        # What the run cost rides in state, so agent.invoke() returns it and
+        # every caller -- experiment, live traffic, a notebook -- gets the
+        # fields an evaluator scores without doing anything.
+        middleware=[run_cost],
+        state_schema=RunCost,
         system_prompt=V1_PROMPT if v == "v1" else V2_PROMPT,
         response_format=Answer,
     )

@@ -200,26 +200,44 @@ The general form: **middleware is the right place for a policy that must apply
 to tools you do not control.** For tools you own, the tool is the right place,
 and the result is smaller, earlier and more informative.
 
-## Why live traffic needed a wrapper
+## What the run cost, and where it lives
 
-`summarize()` in `run_summary.py` produces the fields the evaluators score:
-`tool_payload_chars`, `total_tokens`, `harness_evicted_results`, `tool_calls`.
+`middleware/run_cost.py` extends the agent's state:
 
-None of these are automatic, because **none of them are part of the agent's
-output.** `agent.invoke()` returns state — messages and a structured response.
-The metrics are derived by walking those messages afterwards, so something has
-to do the walking and attach the result to the traced run.
+```python
+class RunCost(AgentState):
+    tool_payload_chars: int
+    total_tokens: int
+    harness_evicted_results: int
+    tool_calls: int
 
-The eval harness gets this for free: its `target()` function *is* the root run,
-and whatever it returns becomes the run's outputs. Live traffic had no such
-wrapper, so the root run carried agent state and nothing else — and every
-online evaluator returned `None` on 12 of 12 traces while looking correctly
-configured. The fix was a `@traceable` wrapper around the same `summarize()`.
+@after_agent(state_schema=RunCost)
+def run_cost(state, runtime) -> dict: ...
+```
 
-**This could be automatic and is not.** A middleware computing these on every
-invocation would remove the wrapper and the duplication. That is the one place
-in this design where middleware is clearly the right tool and we have not used
-it yet.
+`create_deep_agent` takes both `state_schema` and `middleware`, so these are
+part of what `agent.invoke()` returns. Every caller gets them -- the
+experiment, live traffic, a notebook -- without doing anything.
+
+This replaced a `summarize()` helper both callers had to remember to apply, an
+arrangement that had already failed: the traffic generator did not call it, so
+its root run carried agent state and nothing else, and every online evaluator
+returned None on 12 of 12 traces while looking correctly configured. **A field
+that is part of state cannot be forgotten.**
+
+`generate_traces.py` still wraps each question in `@traceable`, but for a
+smaller reason: an online evaluator attaches to a run, so something has to be
+the root. It no longer decides what the fields are.
+
+### What is not measured here
+
+The metrics above are facts about the OUTCOME and the cost. They say nothing
+about the PATH -- and v1 and v2 differ precisely in which tools they call. A
+trajectory evaluator (`agentevals`, trajectory match or LLM judge) would catch
+"delegated with task() instead of analyze_result" directly, rather than
+inferring it from `harness_evicted_results`. LangSmith also exposes a
+`trajectory` variable to online thread evaluators, though only in the GCP US
+region. Neither is here yet; both would add a dimension rather than replace one.
 
 ## Both builds
 

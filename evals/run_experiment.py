@@ -23,16 +23,22 @@ from langsmith import Client  # noqa: E402
 
 from evals.dataset import DATASET_NAME, upsert  # noqa: E402
 from evals.evaluators import ALL  # noqa: E402
-from run_summary import summarize  # noqa: E402
 
 def make_target(variant: str):
+    """The function under test. A pass-through, because the agent's own state
+    carries what the evaluators score -- see middleware/run_cost.py."""
     from agent import build_agent
 
     agent = build_agent(variant)
 
     def target(inputs: dict) -> dict:
         out = agent.invoke({"messages": [{"role": "user", "content": inputs["question"]}]})
-        return summarize(out)
+        answer = out.get("structured_response")
+        return {
+            "structured_response": answer.model_dump() if answer is not None else {},
+            **{k: out.get(k, 0) for k in
+               ("tool_payload_chars", "total_tokens", "harness_evicted_results", "tool_calls")},
+        }
 
     return target
 

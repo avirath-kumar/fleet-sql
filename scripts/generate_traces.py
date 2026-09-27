@@ -51,14 +51,18 @@ def main() -> int:
 
     agent = build_agent(args.variant)
     from langsmith import traceable
-    from run_summary import summarize
 
-    # Traced as ONE root run whose outputs carry the scored fields. Invoking
-    # the agent directly leaves a root run holding agent state, which every
-    # online evaluator reads as "no data" and skips.
+    #: One root run per question, so the online evaluators have a run whose
+    #: outputs they can read. The FIELDS come from agent state (see
+    #: middleware/run_cost.py); this only decides what counts as the root.
+    SCORED = ("tool_payload_chars", "total_tokens", "harness_evicted_results", "tool_calls")
+
     @traceable(name="fleet_question", run_type="chain")
     def ask(question: str) -> dict:
-        return summarize(agent.invoke({"messages": [{"role": "user", "content": question}]}))
+        out = agent.invoke({"messages": [{"role": "user", "content": question}]})
+        answer = out.get("structured_response")
+        return {"structured_response": answer.model_dump() if answer is not None else {},
+                **{k: out.get(k, 0) for k in SCORED}}
 
     tag = args.tag or f"{args.variant}-traffic"
     evicted = 0
