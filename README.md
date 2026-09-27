@@ -64,15 +64,16 @@ Both builds, same dataset, same harness — only the tools differ.
 Three arms, same dataset, same harness — only the tools and the receipt differ.
 
 ```
-question                                  v1      v2-regressed   v2
--------------------------------------------------------------------
-distinct 737-800 aircraft w/ open cat C   0/3     2/3            3/3
-which station carries the most deferrals  0/3     3/3            3/3
-(six other questions)                     3/3     3/3            3/3
--------------------------------------------------------------------
-TOTAL (answer_is_correct)                 18/24   23/24          24/24
-no_silent_truncation                      0.67    1.00           1.00
-rows_stayed_out_of_context                0.96    1.00           1.00
+question                                  v1       v2-regressed   v2
+---------------------------------------------------------------------
+distinct 737-800 aircraft w/ open cat C   1/3      2/3            3/3
+which station carries the most deferrals  1/3      3/3            3/3
+(six other questions)                     3/3      3/3            3/3
+---------------------------------------------------------------------
+answer_is_correct                         20/24    23/24          24/24
+no_silent_truncation                      0.70     1.00           1.00
+context_efficiency                        0.88     0.97           0.99
+rows_stayed_out_of_context                0.93     1.00           1.00
 ```
 
 **`v2-regressed` is a real regression, not a contrived one.** Cleaning up the
@@ -110,9 +111,11 @@ The other six pass on both builds every time. When the catalogue has a
 pre-aggregated query, the naive build calls it and is fine — the architecture
 earns its keep exactly where the catalogue runs out.
 
-**v1's score is itself unstable**: 20/24, 21/24 and 18/24 across three sessions
-of the same suite. That instability is the finding, not noise around it. A
-smoke test run once would have passed.
+**v1's score is itself unstable**: 18, 20, 20 and 21 out of 24 across four runs
+of the same unchanged suite, with both derived questions scoring anywhere from
+0/3 to 1/3. The instability is the finding, not noise around it — a smoke test
+run once would have passed. That is why `scripts/experiment.sh` defaults to
+three repetitions.
 
 ## The loop
 
