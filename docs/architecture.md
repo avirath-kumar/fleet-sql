@@ -200,6 +200,36 @@ The general form: **middleware is the right place for a policy that must apply
 to tools you do not control.** For tools you own, the tool is the right place,
 and the result is smaller, earlier and more informative.
 
+## What a trace shows
+
+`response_format=Answer` makes the structured output the final message, so
+without intervention the Messages view of every trace ends in this:
+
+    {"answer":"The 747-8 fleet has 12 aircraft...","counts":[{"label":...
+
+The answer is in there, wrapped in the fields around it. `readable_answer`
+rewrites that message's content with the prose, by returning an AIMessage with
+**the same id** -- `add_messages` treats a repeated id as an overwrite rather
+than an append. Appending a second message does not work: the blob remains,
+still above the readable one.
+
+The result is the split a trace wants:
+
+| where | what |
+|---|---|
+| `messages[-1]` | the prose answer, and nothing else |
+| `structured_response` | `counts`, `result_ids`, `report_path` |
+| run state | `tool_payload_chars`, `total_tokens`, `harness_evicted_results` |
+
+Nothing is lost, which matters here specifically: `answer_is_correct` reads
+`counts` off `structured_response` to check a figure against the database, and
+never looks at `messages`. Verified after the change -- all four evaluators
+score the new shape unchanged.
+
+Three guards keep it from damaging a transcript. It fires only when there is
+prose to show, only on an AI message, and only when that message's text starts
+with `{` -- so a real turn is never overwritten.
+
 ## What the run cost, and where it lives
 
 `middleware/run_cost.py` extends the agent's state:

@@ -17,6 +17,7 @@ import results
 from catalog import describe_catalog
 from model import build_model
 from subagents.analyst import analyze_result
+from middleware.readable_answer import readable_answer
 from middleware.run_cost import RunCost, run_cost
 from tools.query import V1_TOOLS, V2_TOOLS
 
@@ -122,7 +123,9 @@ def build_agent(variant: str | None = None):
         # What the run cost rides in state, so agent.invoke() returns it and
         # every caller -- experiment, live traffic, a notebook -- gets the
         # fields an evaluator scores without doing anything.
-        middleware=[run_cost],
+        # readable_answer first: it rewrites the final message, and run_cost
+        # counts tool payload, so neither depends on the other's result.
+        middleware=[readable_answer, run_cost],
         state_schema=RunCost,
         system_prompt=V1_PROMPT if v == "v1" else V2_PROMPT,
         response_format=Answer,
