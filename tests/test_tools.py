@@ -155,3 +155,26 @@ def test_results_outlive_the_message_that_carried_them():
 def test_an_original_result_has_no_parent():
     big = run_query.invoke({"query_id": "top_level_config_slots", "params": {"model": "747-8"}})
     assert big["parent_id"] is None
+
+
+def test_distinct_counts_answer_how_many_aircraft_without_a_tool_call():
+    """Simplifying the breakdown once dropped high-cardinality columns entirely,
+    and v2 lost an answer it used to get: 'how many distinct aircraft have an
+    open category C deferral' is exactly this number."""
+    big = run_query.invoke({"query_id": "open_deferrals_by_fleet",
+                            "params": {"model": "737-800"}})
+    cat_c = filter_result.invoke({"result_id": big["result_id"], "column": "category",
+                                  "op": "eq", "value": "C"})
+    import sqlite3
+    con = sqlite3.connect(ROOT / "data" / "fleet.db")
+    truth = con.execute(
+        "SELECT COUNT(DISTINCT d.tail_number) FROM deferrals d JOIN aircraft a "
+        "USING(tail_number) WHERE a.model='737-800' AND d.status IN ('open','extended') "
+        "AND d.category='C'").fetchone()[0]
+    assert cat_c["distinct"]["tail_number"] == truth
+
+
+def test_a_column_is_either_broken_down_or_counted_never_both():
+    big = run_query.invoke({"query_id": "open_deferrals_by_fleet",
+                            "params": {"model": "737-800"}})
+    assert not (set(big["breakdown"]) & set(big["distinct"]))

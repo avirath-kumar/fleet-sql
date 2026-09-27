@@ -63,11 +63,10 @@ Both builds, same dataset, same harness — only the tools differ.
 
 | | v1 (naive) | v2 (offload) |
 |---|---|---|
-| `answer_is_correct` | 0.750 | **1.000** |
-| `no_silent_truncation` | 0.750 | **1.000** |
-| `context_efficiency` | 0.971 | 0.992 |
-| `rows_stayed_out_of_context` | 1.000 | 1.000 |
-| **OVERALL** | 0.868 | **0.998** |
+| `answer_is_correct` | 18/24 | **24/24** |
+| `no_silent_truncation` | 0.67 | **1.00** |
+| `rows_stayed_out_of_context` | 0.96 | **1.00** |
+| `context_efficiency` | 0.93 | **0.99** |
 
 Two things worth reading carefully.
 
@@ -82,30 +81,21 @@ Measuring only context size would have shown no problem at all.
 
 ### Is it consistent?
 
-Three repetitions, 24 scored runs per build:
-
-| | v1 | v2 |
-|---|---|---|
-| `answer_is_correct` | 20/24 | **24/24** |
-
-Per example, only two move:
+Three repetitions, 24 scored runs per build. Both derived questions fail **0/3**
+on v1 and pass 3/3 on v2:
 
 | question | database | v1 | v2 |
 |---|---|---|---|
-| which station carries the most open deferrals | 105 | **0/3** | 3/3 |
-| distinct 737-800 aircraft with an open category C deferral | 107 | **2/3** | 3/3 |
+| which station carries the most open deferrals | 105 | 0/3 | 3/3 |
+| distinct 737-800 aircraft with an open category C deferral | 107 | 0/3 | 3/3 |
 
-Read that carefully, because the two failures are not the same kind:
+The other six pass on both builds every time. When the catalogue has a
+pre-aggregated query, the naive build calls it and is fine — the architecture
+earns its keep exactly where the catalogue runs out.
 
-- the station question fails **every time** — that is the architectural failure
-- the distinct-count question **flakes**: right once, wrong twice
-- the other six pass on both builds, every time
-
-So the claim worth making is "v2 is reliable and v1 is not", not "v1 is broken".
-When the catalogue has a pre-aggregated query, the naive build calls it and is
-fine. The architecture earns its keep exactly where the catalogue runs out —
-and a single pass cannot tell the hard failure from the flaky one, which is why
-`scripts/consistency.py` exists.
+**v1's score is itself unstable**: 20/24, 21/24 and 18/24 across three sessions
+of the same suite. That instability is the finding, not noise around it. A
+smoke test run once would have passed.
 
 ## The loop
 

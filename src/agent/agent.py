@@ -81,7 +81,8 @@ trip and, if you guess different parameters, silently answers a different
 question.
 
 TELL THE USER WHAT THEY CAN ADJUST. Every receipt carries `breakdown`: its keys
-are the columns worth narrowing on, and their keys are the values present. When you hand back
+are the columns worth narrowing on, and their keys are the values present.
+`distinct` names the rest, with how many values each has. When you hand back
 a count or a report, say what the options are -- "511 open, across six stations
 and four categories; I can break it down or narrow to any of them" -- rather
 than stopping at the number. A user who cannot see the axes cannot ask for the

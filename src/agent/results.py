@@ -43,6 +43,11 @@ class Result:
     #: filter on, the inner keys are the values actually present. A receipt
     #: without this reads as "job done" and leaves the agent nothing to offer.
     breakdown: dict[str, dict[str, int]] = field(default_factory=dict)
+    #: column -> how many distinct values, for the columns too varied to break
+    #: down. "How many distinct aircraft are affected" is answered from here
+    #: with no tool call at all; omitting these columns entirely cost v2 a
+    #: correct answer it used to get.
+    distinct: dict[str, int] = field(default_factory=dict)
     #: Present only for a small result.
     rows: list[dict] | None = None
     #: Lineage, so a filter is reversible and "go back" does not mean re-query.
@@ -56,24 +61,30 @@ class Result:
         return d
 
 
-def _breakdown(rows: list[dict]) -> dict[str, dict[str, int]]:
-    """Count every column narrow enough to be a facet.
+def _summarize_columns(rows: list[dict]) -> tuple[dict, dict]:
+    """Per column: a value breakdown if it is narrow, a distinct count if not.
 
     Derived from the DATA, not from a per-query declaration. The catalogue used
     to name its own facet columns, which meant a column nobody thought to list
-    was invisible as a refinement even when it had four distinct values.
+    was invisible even when it had four distinct values.
+
+    Both halves are kept because they answer different questions. "How does
+    this split by category" needs the values; "how many aircraft are affected"
+    needs only the cardinality, and a column with 134 values has the second
+    without being worth the first.
     """
-    out: dict[str, dict[str, int]] = {}
+    breakdown: dict[str, dict[str, int]] = {}
+    distinct: dict[str, int] = {}
     for col in (rows[0] if rows else {}):
         counts: dict[str, int] = {}
         for r in rows:
             key = str(r.get(col))
             counts[key] = counts.get(key, 0) + 1
-            if len(counts) > MAX_VALUES:
-                break
         if 1 < len(counts) <= MAX_VALUES:
-            out[col] = dict(sorted(counts.items(), key=lambda kv: -kv[1]))
-    return out
+            breakdown[col] = dict(sorted(counts.items(), key=lambda kv: -kv[1]))
+        elif len(counts) > MAX_VALUES:
+            distinct[col] = len(counts)
+    return breakdown, distinct
 
 
 def query(sql: str, params: dict) -> tuple[list[str], list[dict]]:
@@ -102,12 +113,13 @@ def save(rows: list[dict], query_name: str, params: dict, columns: list[str] | N
         for r in rows:
             fh.write(json.dumps(r, default=str) + "\n")
 
+    breakdown, distinct = _summarize_columns(rows)
     result = Result(
         result_id=result_id, query=query_name, params=params,
         row_count=len(rows),
         columns=columns or (list(rows[0]) if rows else []),
         preview=rows[:PREVIEW_ROWS], path=str(path.relative_to(ROOT)),
-        breakdown=_breakdown(rows),
+        breakdown=breakdown, distinct=distinct,
         rows=rows if len(rows) <= inline_under else None,
         parent_id=parent_id, derived_by=derived_by,
     )
