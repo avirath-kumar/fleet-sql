@@ -87,18 +87,33 @@ wrong. Measuring only context size would have shown almost nothing.
 
 ### What is reliable, and what is not
 
-**v1 versus v2 is solid.** Both derived questions fail on v1 and pass on v2,
-repeatedly. v1's own total has been 18, 18, 20, 20 and 21 out of 24 across five
-runs of the same unchanged suite — unstable, always worst. That instability is
-itself the argument: a smoke test run once would have passed.
+Measured across seven runs of this unchanged suite:
 
-**The regressed arm is a subtler demonstration and does not always reproduce.**
-It has scored 2/3, 0/1, 2/3 and 3/3 on the distinct-count question across four
-runs, including a clean 24/24 above. Removing `distinct` from the receipt does
-not remove the capability — `aggregate_result` with `count_distinct` still
-reaches the answer, just less often. So the claim it supports is "this cleanup
-made the agent less reliable", not "this cleanup broke it". Present it that way
-or it will contradict itself on stage.
+| metric | v1 | v2 |
+|---|---|---|
+| `no_silent_truncation` | 0.67 – 0.74 | **1.00 every time** |
+| `rows_stayed_out_of_context` | 0.85 – 0.96 | **1.00 every time** |
+| `context_efficiency` | 0.81 – 0.95 | 0.96 – 0.99 |
+| `answer_is_correct` | 18–22 / 24 | 23–24 / 24 |
+
+**The structural metrics separate perfectly and never move.** v1 puts 140 KB in
+the context and needs the harness to rescue it; v2 never does. That is a fact
+about the architecture, and it holds on every run.
+
+**The correctness metric is noisy.** v1 has scored anywhere from 18 to 22 out
+of 24, and the station question — which failed 0/3 in one run — passed 3/3 in
+another. Wrong numbers are a *consequence* of putting rows in the context, and
+consequences are probabilistic. Do not promise "v1 gets this wrong" on stage;
+it will get it right roughly a third of the time.
+
+Lead with the structural gap, which always holds, and use a correctness failure
+as the illustration of what it costs when it bites.
+
+The regressed arm is subtler still and often does not reproduce at all: it has
+scored 2/3, 0/1, 2/3, 3/3 and 3/3 on the distinct-count question. Removing
+`distinct` from the receipt does not remove the capability, because
+`aggregate_result` with `count_distinct` still reaches the answer. It supports
+"this cleanup made the agent less reliable", not "broke it".
 
 When the catalogue has a pre-aggregated query, every build is fine. The
 architecture earns its keep exactly where the catalogue runs out.
