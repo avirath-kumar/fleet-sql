@@ -18,8 +18,11 @@ instead of producing a branch that is quietly no longer the thing it claims.
                   receipt drops `distinct`, so "how many distinct aircraft"
                   has nothing to read.
 
-main stays AHEAD of both: it is the fixed build, and a branch is main minus
-something. Engine cannot pass by re-adding what a branch never had.
+Each branch is an ORPHAN with a single commit. Built as `main + 1` instead,
+every commit that introduced the architecture stays in the branch's log --
+`git log` on demo/naive would show "Restore distinct counts" and the rest, and
+the fix is recoverable from history rather than absent. An orphan branch is a
+snapshot: what you see is all there is.
 """
 from __future__ import annotations
 
@@ -125,23 +128,29 @@ def main() -> int:
         raise SystemExit(f"run this from main (on {start})")
 
     for branch, build in BRANCHES.items():
-        sh("checkout", "--quiet", "-B", branch, "main")
+        # --orphan: the tree comes from main, the history does not.
+        sh("checkout", "--quiet", "--orphan", f"{branch}-wip", "main")
         try:
             build()
-        except SystemExit:
+        except SystemExit:  # noqa: PERF203
             # A failed build leaves the tree half-edited. Reset it and get off
             # the branch before re-raising, or those edits ride back to main on
             # the next checkout -- which happened, and put the regression this
             # script is supposed to CREATE onto main, where it was committed.
             sh("checkout", "--quiet", "--", ".")
             sh("clean", "--quiet", "-fd")
-            sh("checkout", "--quiet", "main")
+            sh("checkout", "--quiet", "--force", "main")
+            sh("branch", "-D", f"{branch}-wip", check=False)
             raise
         sh("add", "-A")
         sh("-c", "user.email=demo@fleet-sql.local", "-c", "user.name=fleet-sql",
            "commit", "--quiet", "-m",
-           f"{branch}: derived from main by arms/make_branches.py\n\n"
-           f"Generated, not hand-edited. Rebuild with arms/make_branches.py.")
+           f"{branch}: snapshot derived from main by arms/make_branches.py\n\n"
+           f"Generated, not hand-edited, and deliberately without history: this\n"
+           f"is what the codebase looks like, not how it got here.")
+        sh("branch", "--quiet", "-f", branch, "HEAD")
+        sh("checkout", "--quiet", branch)
+        sh("branch", "-D", f"{branch}-wip", check=False)
         changed = sh("diff", "--name-only", "main", branch).splitlines()
         print(f"  {branch}: {len(changed)} file(s) differ from main")
         for f in changed:
