@@ -66,56 +66,42 @@ Three arms, same dataset, same harness — only the tools and the receipt differ
 ```
 question                                  v1       v2-regressed   v2
 ---------------------------------------------------------------------
-distinct 737-800 aircraft w/ open cat C   1/3      2/3            3/3
-which station carries the most deferrals  1/3      3/3            3/3
+distinct 737-800 aircraft w/ open cat C   0/3      3/3            3/3
+which station carries the most deferrals  0/3      3/3            3/3
 (six other questions)                     3/3      3/3            3/3
 ---------------------------------------------------------------------
-answer_is_correct                         20/24    23/24          24/24
-no_silent_truncation                      0.70     1.00           1.00
-context_efficiency                        0.88     0.97           0.99
-rows_stayed_out_of_context                0.93     1.00           1.00
+answer_is_correct                         18/24    24/24          24/24
+no_silent_truncation                      0.67     1.00           1.00
+context_efficiency                        0.84     0.97           0.99
+rows_stayed_out_of_context                0.89     1.00           1.00
 ```
-
-**`v2-regressed` is a real regression, not a contrived one.** Cleaning up the
-receipt collapsed two column summaries into one and dropped high-cardinality
-columns entirely — and with them the cardinality. "How many distinct aircraft
-are affected" is exactly that number. The station question got *better* in the
-same change; the distinct question degraded to 2/3, intermittently. Code review
-did not catch it. Re-running the evals did.
-
-That middle column is the argument for this whole loop: it is the failure that
-passes a smoke test.
-
-Two things worth reading carefully.
 
 **`answer_is_correct` is code, not a judge.** The failure is a plausible wrong
 number, and a judge reading "ORD carries the most, with 118" scores it well.
 Every example carries a `truth_sql`; the evaluator runs it and compares.
 
-**`rows_stayed_out_of_context` is 1.000 on both** — and that is the honest
-finding. The naive build never blows the context budget, because the harness
-spills the oversized result to a file first. It stays cheap and becomes wrong.
-Measuring only context size would have shown no problem at all.
+**`rows_stayed_out_of_context` is close to 1.00 on every arm** — and that is
+the honest finding. The naive build rarely blows the context budget, because
+the harness evicts the oversized result first. It stays cheap and becomes
+wrong. Measuring only context size would have shown almost nothing.
 
-### Is it consistent?
+### What is reliable, and what is not
 
-Three repetitions, 24 scored runs per build. Both derived questions fail **0/3**
-on v1 and pass 3/3 on v2:
+**v1 versus v2 is solid.** Both derived questions fail on v1 and pass on v2,
+repeatedly. v1's own total has been 18, 18, 20, 20 and 21 out of 24 across five
+runs of the same unchanged suite — unstable, always worst. That instability is
+itself the argument: a smoke test run once would have passed.
 
-| question | database | v1 | v2 |
-|---|---|---|---|
-| which station carries the most open deferrals | 105 | 0/3 | 3/3 |
-| distinct 737-800 aircraft with an open category C deferral | 107 | 0/3 | 3/3 |
+**The regressed arm is a subtler demonstration and does not always reproduce.**
+It has scored 2/3, 0/1, 2/3 and 3/3 on the distinct-count question across four
+runs, including a clean 24/24 above. Removing `distinct` from the receipt does
+not remove the capability — `aggregate_result` with `count_distinct` still
+reaches the answer, just less often. So the claim it supports is "this cleanup
+made the agent less reliable", not "this cleanup broke it". Present it that way
+or it will contradict itself on stage.
 
-The other six pass on both builds every time. When the catalogue has a
-pre-aggregated query, the naive build calls it and is fine — the architecture
-earns its keep exactly where the catalogue runs out.
-
-**v1's score is itself unstable**: 18, 20, 20 and 21 out of 24 across four runs
-of the same unchanged suite, with both derived questions scoring anywhere from
-0/3 to 1/3. The instability is the finding, not noise around it — a smoke test
-run once would have passed. That is why `scripts/experiment.sh` defaults to
-three repetitions.
+When the catalogue has a pre-aggregated query, every build is fine. The
+architecture earns its keep exactly where the catalogue runs out.
 
 ## The loop
 
