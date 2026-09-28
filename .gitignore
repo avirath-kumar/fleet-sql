@@ -1,0 +1,18 @@
+# Credentials, anywhere in the tree.
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Generated: the database is rebuilt by data/generate.py, and offloaded query
+# results are scratch by definition.
+data/fleet.db
+.results/
+.dev-logs/
+
+# docs/ is tracked: it holds architecture.md. Scratch notes go in docs/local/.
+docs/local/
