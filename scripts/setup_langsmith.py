@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import time
 import pathlib
 import sys
 
@@ -173,6 +174,46 @@ def promote_traces(client: Client, limit: int) -> None:
     print(f"  promoted {added} failing trace(s) into '{DATASET_NAME}'")
 
 
+def prune_experiments(client: Client, keep: int) -> None:
+    """Delete old experiments on our dataset, keeping the newest `keep` per arm.
+
+    Iterating on a demo leaves a lot of these -- 21 after a day, most of them
+    a half-finished idea -- and the comparison view is unreadable with every
+    attempt in it. Kept per ARM rather than overall, so pruning to one cannot
+    leave two runs of the same variant and none of another.
+    """
+    from collections import defaultdict
+
+    ds = client.read_dataset(dataset_name=DATASET_NAME)
+    by_arm: dict[str, list] = defaultdict(list)
+    for proj in sorted(client.list_projects(reference_dataset_id=ds.id),
+                       key=lambda p: p.start_time or "", reverse=True):
+        by_arm[(proj.metadata or {}).get("variant") or "?"].append(proj)
+
+    removed = kept = 0
+    for arm, projects in sorted(by_arm.items()):
+        for i, proj in enumerate(projects):
+            if i < keep:
+                kept += 1
+                continue
+            # Deletes are rate limited per session: clearing 21 experiments
+            # got 429s after the first ten. Back off rather than losing the
+            # rest, which left the view half-pruned and needing another pass.
+            for attempt in range(5):
+                try:
+                    client.delete_project(project_id=proj.id)
+                    removed += 1
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    if "429" not in str(exc) and "Rate limit" not in str(exc):
+                        print(f"  ! {proj.name}: {str(exc)[:90]}")
+                        break
+                    time.sleep(2 ** attempt)
+            else:
+                print(f"  ! {proj.name}: still rate limited after 5 tries")
+    print(f"  {removed} removed, {kept} kept ({len(by_arm)} arm(s), keeping {keep} each)")
+
+
 SECTIONS = ("project", "dataset", "evaluators", "queue")
 
 
@@ -181,8 +222,17 @@ def main() -> int:
     ap.add_argument("--only", nargs="*", choices=SECTIONS, default=None)
     ap.add_argument("--promote", nargs="?", const=5, type=int, default=None,
                     metavar="N", help="add up to N failing traces to the dataset")
+    ap.add_argument("--prune-experiments", nargs="?", const=1, type=int, default=None,
+                    metavar="KEEP",
+                    help="delete old experiments, keeping the newest KEEP per arm "
+                         "(default 1; 0 clears them all)")
     args = ap.parse_args()
     client = Client()
+
+    if args.prune_experiments is not None:
+        print("\n[prune experiments]")
+        prune_experiments(client, args.prune_experiments)
+        return 0
 
     if args.promote is not None:
         print("\n[promote]")
