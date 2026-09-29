@@ -76,6 +76,13 @@ def main() -> int:
     #: carry `messages`, and a wrapper returning a bare dict rendered as
     #: generic Fields instead -- which is what this used to do.
     tag = args.tag or f"{args.variant}-traffic"
+    run_config = {
+        "run_name": "fleet-sql-agent",
+        "metadata": {
+            "agent_variant": args.variant,
+            "environment": os.environ.get("APP_ENVIRONMENT", "demo"),
+        },
+    }
     evicted = 0
     succeeded = 0
     selected = QUESTIONS[: args.limit]
@@ -86,12 +93,13 @@ def main() -> int:
             if hosted:
                 out = client.runs.wait(
                     None, "agent", input=inputs,
-                    config={"tags": [tag, args.variant, "hosted"]},
+                    config={**run_config,
+                            "tags": [tag, args.variant, "hosted"]},
                 )
             else:
                 with tracing_v2_enabled(project_name=os.environ["LANGSMITH_PROJECT"],
                                         tags=[tag, args.variant]):
-                    out = agent.invoke(inputs)
+                    out = agent.invoke(inputs, config=run_config)
             if not isinstance(out, dict):
                 raise TypeError("Agent did not return a state object")
             chars = out.get("tool_payload_chars")

@@ -166,6 +166,8 @@ and datasets, and a gateway key (`lsv2_sk_…`) that pays for model calls.
 
 `AGENT_VARIANT=v1|v2` picks the build; `scripts/compare.py "question"` runs one
 question through both and prints what each cost.
+`APP_ENVIRONMENT` labels the environment on emitted root runs (defaults to
+`demo`).
 
 ## The data
 
