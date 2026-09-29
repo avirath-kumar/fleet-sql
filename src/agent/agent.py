@@ -62,9 +62,9 @@ def build_agent(variant: str | None = None):
     carries: no `distinct`. It exists so the suite can demonstrate a cleanup
     breaking something, which is the failure evals catch and review does not.
     """
-    v = (variant or VARIANT).lower()
+    selected_variant = (variant or VARIANT).lower()
     tools = list(V1_TOOLS)
-    return create_deep_agent(
+    agent = create_deep_agent(
         model=build_model(),
         tools=tools,
         # Rooted at .results/, NOT the project root: the agent gets ls, glob,
@@ -80,9 +80,16 @@ def build_agent(variant: str | None = None):
         # counts tool payload, so neither depends on the other's result.
         middleware=[run_cost],
         state_schema=RunCost,
-        system_prompt=V1_PROMPT if v == "v1" else V2_PROMPT,
+        system_prompt=V1_PROMPT if selected_variant == "v1" else V2_PROMPT,
         response_format=Answer,
     )
+    return agent.with_config({
+        "run_name": "fleet-sql-agent",
+        "metadata": {
+            "agent_variant": selected_variant,
+            "environment": os.environ.get("APP_ENVIRONMENT", "demo"),
+        },
+    })
 
 
 agent = build_agent()
