@@ -74,9 +74,14 @@ def rows_stayed_out_of_context(run: Any, example: Any = None) -> dict:
 
     Measured on tool-output size rather than on which tool was called, because
     the thing that hurts is bytes in the context window, and an agent can reach
-    that total by any route.
+    that total by any route. A harness eviction means the payload reached
+    context and violated the guardrail, regardless of the reported size.
     """
     out = getattr(run, "outputs", None) or {}
+    evicted = out.get("harness_evicted_results")
+    if evicted:
+        return {"key": "rows_stayed_out_of_context", "score": 0.0,
+                "comment": "a harness eviction means the payload reached context and violated the guardrail"}
     chars = out.get("tool_payload_chars")
     if chars is None:
         return {"key": "rows_stayed_out_of_context", "score": None,

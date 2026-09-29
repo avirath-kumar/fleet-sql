@@ -12,7 +12,13 @@ looking correctly configured. A field that is part of state cannot be forgotten.
 """
 from __future__ import annotations
 
-from langchain.agents.middleware import AgentState, after_agent
+from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import Any
+
+from langchain.agents.middleware import AgentMiddleware, AgentState, ModelRequest, ModelResponse
+from langchain_core.messages import ToolMessage
+from langgraph.types import Command
 
 #: Where deepagents parks a tool result it had to evict. NOTE this is a
 #: RECOVERY path, not prevention: `_overflow_clip` runs only after
@@ -34,15 +40,81 @@ class RunCost(AgentState):
     tool_calls: int
 
 
-@after_agent(state_schema=RunCost)
-def run_cost(state: RunCost, runtime) -> dict:
-    payload = tokens = evicted = calls = 0
-    for m in state["messages"]:
-        if getattr(m, "type", None) == "tool":
-            content = str(m.content)
-            payload += len(content)
-            evicted += HARNESS_OFFLOAD_MARKER in content
-            calls += 1
-        tokens += (getattr(m, "usage_metadata", None) or {}).get("total_tokens", 0)
-    return {"tool_payload_chars": payload, "total_tokens": tokens,
-            "harness_evicted_results": evicted, "tool_calls": calls}
+@dataclass
+class _Counters:
+    tool_payload_chars: int = 0
+    total_tokens: int = 0
+    harness_evicted_results: int = 0
+    tool_calls: int = 0
+    depth: int = 0
+
+
+_counters: ContextVar[_Counters | None] = ContextVar("run_cost_counters", default=None)
+
+
+class RunCostMiddleware(AgentMiddleware[RunCost]):
+    """Accumulate model and tool costs while the agent executes."""
+
+    state_schema = RunCost
+
+    def before_agent(self, state: RunCost, runtime) -> None:
+        counters = _counters.get()
+        if counters is None:
+            counters = _Counters(depth=1)
+            _counters.set(counters)
+        else:
+            counters.depth += 1
+
+    def after_agent(self, state: RunCost, runtime) -> dict[str, int]:
+        counters = _counters.get() or _Counters()
+        result = {
+            "tool_payload_chars": counters.tool_payload_chars,
+            "total_tokens": counters.total_tokens,
+            "harness_evicted_results": counters.harness_evicted_results,
+            "tool_calls": counters.tool_calls,
+        }
+        counters.depth -= 1
+        if counters.depth <= 0:
+            _counters.set(None)
+        return result
+
+    def wrap_tool_call(self, request, handler):
+        counters = _counters.get()
+        if counters is None:
+            counters = _Counters(depth=1)
+            _counters.set(counters)
+        result = handler(request)
+        counters.tool_calls += 1
+        for content in _tool_result_contents(result):
+            text = str(content)
+            counters.tool_payload_chars += len(text)
+            if HARNESS_OFFLOAD_MARKER in text:
+                counters.harness_evicted_results += 1
+        return result
+
+    def wrap_model_call(self, request: ModelRequest, handler) -> ModelResponse:
+        counters = _counters.get()
+        if counters is None:
+            counters = _Counters(depth=1)
+            _counters.set(counters)
+        response = handler(request)
+        for message in response.result:
+            counters.total_tokens += (getattr(message, "usage_metadata", None) or {}).get(
+                "total_tokens", 0
+            )
+        return response
+
+
+def _tool_result_contents(result: Any) -> list[Any]:
+    if isinstance(result, ToolMessage):
+        return [result.content]
+    if isinstance(result, Command):
+        return [
+            message.content
+            for message in result.update.get("messages", [])
+            if isinstance(message, ToolMessage)
+        ]
+    return []
+
+
+run_cost = RunCostMiddleware()
