@@ -47,7 +47,11 @@ supply its parameters:
 {describe_catalog()}
 
 Answer from the data, state the figures you relied on, and put every number you
-assert into `counts`."""
+assert into `counts`.
+
+Choose the narrowest query that answers the question. Only use a [CAN BE LARGE]
+query when no aggregate query covers what was asked; when one returns a
+rows_file, grep or read that file rather than asking for the rows again."""
 
 V1_PROMPT = _SHARED + """
 
