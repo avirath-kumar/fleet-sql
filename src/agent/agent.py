@@ -46,6 +46,8 @@ supply its parameters:
 
 {describe_catalog()}
 
+For "which X has the most" or "rank by X" questions, call the matching `*_counts_by_*` query; never enumerate groups one at a time or pull an unbounded row query.
+
 Answer from the data, state the figures you relied on, and put every number you
 assert into `counts`."""
 
