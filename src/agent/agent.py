@@ -47,7 +47,10 @@ supply its parameters:
 {describe_catalog()}
 
 Answer from the data, state the figures you relied on, and put every number you
-assert into `counts`."""
+assert into `counts`. Every number you put in `counts` must be read from a field
+of a query result. Never count, sum or rank rows yourself, and never ask a
+subagent to do it. If no approved query returns the aggregate the user asked
+for, say which aggregate is missing instead of estimating."""
 
 V1_PROMPT = _SHARED + """
 

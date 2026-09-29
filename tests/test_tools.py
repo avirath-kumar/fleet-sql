@@ -56,6 +56,13 @@ def test_747_8_has_43_top_level_slots():
     assert r["row_count"] == 43
 
 
+def test_station_counts_are_preaggregated():
+    r = run_query_inline.invoke({"query_id": "deferral_counts_by_station",
+                                 "params": {"model": "737-800"}})
+    assert r["rows"][0]["station_code"] == "ORD"
+    assert r["rows"][0]["open_deferrals"] == 105
+
+
 def test_page_result_cannot_be_talked_into_a_dump(big):
     p = page_result.invoke({"result_id": big["result_id"], "offset": 0, "limit": 10_000})
     assert p["returned"] == results.MAX_PAGE
