@@ -79,6 +79,11 @@ def build_agent(variant: str | None = None):
         # readable_answer first: it rewrites the final message, and run_cost
         # counts tool payload, so neither depends on the other's result.
         middleware=[run_cost],
+        subagents=[{
+            "name": "general-purpose",
+            "description": "Handle complex tasks using the available tools.",
+            "middleware": [run_cost],
+        }],
         state_schema=RunCost,
         system_prompt=V1_PROMPT if v == "v1" else V2_PROMPT,
         response_format=Answer,
