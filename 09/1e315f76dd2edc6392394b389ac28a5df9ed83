@@ -1,0 +1,24 @@
+.gitignore
+  s_bc8697095f0431::t_34cc756f137149 10-15,23-24
+langgraph.json
+  s_bc8697095f0431::t_b959d0978330b1 1-6,8
+  s_bc8697095f0431::t_8b9c9fff959abf 7
+.dockerignore
+  s_bc8697095f0431::t_b959d0978330b1 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "091e315f76dd2edc6392394b389ac28a5df9ed83",
+  "prompts": {},
+  "sessions": {
+    "s_bc8697095f0431": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0e972-047f-79d1-bbe7-e4cdd61fd3b7",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Avi Kumar <avirath.kmr@gmail.com>"
+    }
+  }
+}
