@@ -50,6 +50,21 @@ def test_small_results_come_back_inline():
     assert r.get("rows") is not None
 
 
+def test_deferral_counts_by_station_are_ranked():
+    r = run_query_inline.invoke({"query_id": "deferral_counts_by_station",
+                                 "params": {"model": "737-800"}})
+    assert len(r["rows"]) == 6
+    assert r["rows"][0]["station_code"] == "ORD"
+    assert r["rows"][0]["open_deferrals"] == 105
+
+
+def test_deferral_counts_by_ata_are_ranked():
+    r = run_query_inline.invoke({"query_id": "deferral_counts_by_ata",
+                                 "params": {"model": "A320-200"}})
+    assert r["rows"][0]["ata_chapter"] == 27
+    assert r["rows"][0]["open_deferrals"] == 17
+
+
 def test_747_8_has_43_top_level_slots():
     """The figure the prototype reported, pinned so data changes cannot drift it."""
     r = run_query.invoke({"query_id": "top_level_config_slots", "params": {"model": "747-8"}})

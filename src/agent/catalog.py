@@ -130,6 +130,45 @@ CATALOG: dict[str, Query] = {q.id: q for q in (
         """,
     ),
     Query(
+        id="deferral_counts_by_station",
+        summary="Open deferral counts grouped by station for a model.",
+        params=(Param("model", "model", "Aircraft model, e.g. '737-800'"),),
+        size="small",
+        sql="""
+            SELECT d.station_code, COUNT(*) AS open_deferrals,
+                   COUNT(DISTINCT d.tail_number) AS aircraft_affected
+              FROM deferrals d JOIN aircraft a USING (tail_number)
+             WHERE a.model = :model AND d.status IN ('open','extended')
+             GROUP BY d.station_code ORDER BY open_deferrals DESC
+        """,
+    ),
+    Query(
+        id="deferral_counts_by_ata",
+        summary="Open deferral counts grouped by ATA chapter for a model.",
+        params=(Param("model", "model", "Aircraft model, e.g. '737-800'"),),
+        size="small",
+        sql="""
+            SELECT d.ata_chapter, COUNT(*) AS open_deferrals,
+                   COUNT(DISTINCT d.tail_number) AS aircraft_affected
+              FROM deferrals d JOIN aircraft a USING (tail_number)
+             WHERE a.model = :model AND d.status IN ('open','extended')
+             GROUP BY d.ata_chapter ORDER BY open_deferrals DESC
+        """,
+    ),
+    Query(
+        id="deferral_counts_by_tail",
+        summary="Open deferral counts grouped by aircraft for a model.",
+        params=(Param("model", "model", "Aircraft model, e.g. '737-800'"),),
+        size="small",
+        sql="""
+            SELECT d.tail_number, COUNT(*) AS open_deferrals,
+                   COUNT(DISTINCT d.tail_number) AS aircraft_affected
+              FROM deferrals d JOIN aircraft a USING (tail_number)
+             WHERE a.model = :model AND d.status IN ('open','extended')
+             GROUP BY d.tail_number ORDER BY open_deferrals DESC
+        """,
+    ),
+    Query(
         id="aircraft_in_fleet",
         summary="Every aircraft of a model, with base and status.",
         params=(Param("model", "model", "Aircraft model, e.g. '747-8'"),),
