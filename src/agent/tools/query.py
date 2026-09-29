@@ -78,19 +78,25 @@ def _check_params(q, params: dict) -> dict:
 
 # --- v1: the naive tool -----------------------------------------------------
 
-@tool(parse_docstring=True)
+@tool
 @_guard
 def run_query_inline(query_id: str, params: dict | None = None) -> dict:
-    """Run a pre-approved query and return all of its rows.
-
-    Args:
-        query_id: One of the approved query ids.
-        params: Parameter values the query declares.
-    """
+    """Run an approved query, returning small results inline and larger rows in rows_file."""
     q = _lookup(query_id)
     bound = _check_params(q, params or {})
     columns, rows = results.query(q.sql, bound)
-    return {"query_id": q.id, "params": bound, "row_count": len(rows), "rows": rows}
+    if len(rows) <= results.MAX_INLINE or q.size == "small":
+        return {"query_id": q.id, "params": bound, "row_count": len(rows), "rows": rows}
+    relative_path = results.write_rows(q.id, rows)
+    return {
+        "query_id": q.id,
+        "params": bound,
+        "row_count": len(rows),
+        "columns": columns,
+        "preview": rows[:results.PREVIEW_ROWS],
+        "rows_file": relative_path,
+        "note": "Full rows are newline-delimited JSON at rows_file; use grep or read_file on it.",
+    }
 
 
 TOOLS = [run_query_inline]

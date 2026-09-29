@@ -37,6 +37,16 @@ MAX_INLINE = 25         # below this, withholding rows is friction with no gain
 MAX_VALUES = 8          # a column with more distinct values is not a facet
 
 
+def write_rows(query_id: str, rows: list[dict]) -> str:
+    """Write rows as newline-delimited JSON and return their relative path."""
+    DIR.mkdir(parents=True, exist_ok=True)
+    path = DIR / f"{query_id}-{uuid.uuid4().hex}.jsonl"
+    with path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, separators=(",", ":")) + "\n")
+    return str(path.relative_to(DIR))
+
+
 def query(sql: str, params: dict) -> tuple[list[str], list[dict]]:
     """Run approved SQL. The only place this module touches the database."""
     con = sqlite3.connect(DB_PATH)
@@ -46,5 +56,4 @@ def query(sql: str, params: dict) -> tuple[list[str], list[dict]]:
         return [c[0] for c in cur.description], [dict(r) for r in cur.fetchall()]
     finally:
         con.close()
-
 
