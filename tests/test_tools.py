@@ -102,13 +102,18 @@ def test_catalogue_declares_params_for_every_placeholder():
         assert placeholders == declared, f"{q.id}: {placeholders} vs {declared}"
 
 
-def test_v1_returns_every_row():
-    """The naive shape, kept honest: if this ever stops being huge the
-    comparison stops meaning anything."""
-    r = run_query_inline.invoke({"query_id": "open_deferrals_by_fleet",
-                                 "params": {"model": "737-800"}})
-    assert len(r["rows"]) == r["row_count"] > 400
-    assert len(json.dumps(r["rows"])) > 100_000
+def test_large_query_returns_receipt_and_persists_rows():
+    result = run_query_inline.invoke({"query_id": "open_deferrals_by_fleet",
+                                      "params": {"model": "737-800"}})
+    assert result["row_count"] == 511
+    assert "rows" not in result
+
+    category_a = filter_result.invoke({"result_id": result["result_id"],
+                                       "column": "category", "value": "A"})
+    assert category_a["row_count"] == 37
+
+    stored = results.DIR / f"{result['result_id']}.jsonl"
+    assert sum(1 for _ in stored.open(encoding="utf-8")) == 511
 
 
 def test_filter_records_lineage_so_it_can_be_reverted():

@@ -51,7 +51,11 @@ assert into `counts`."""
 
 V1_PROMPT = _SHARED + """
 
-Use run_query_inline to run a query and read its rows."""
+Use run_query_inline to run a query. Large results return a receipt with a
+result_id instead of rows; use filter_result, aggregate_result, or page_result
+on that receipt. Count and rank only with receipt row_count or aggregate_result
+values. Never read an offloaded file with read_file or grep, delegate counting
+to a task subagent, or state a total that did not come from a receipt."""
 
 V2_PROMPT = V1_PROMPT
 
