@@ -1,0 +1,20 @@
+scripts/generate_traces.py
+  s_bc8697095f0431::t_be6dc44d2cf6d8 5-6,19,46-47,50,53-57,60-71,80-82,85-98,100,102,105-108,110
+  s_bc8697095f0431::t_aa94dc87d83045 58-59,101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "16fce708c6371040c848f578b9ecedc2e4412e12",
+  "prompts": {},
+  "sessions": {
+    "s_bc8697095f0431": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0e972-047f-79d1-bbe7-e4cdd61fd3b7",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Avi Kumar <avirath.kmr@gmail.com>"
+    }
+  }
+}
